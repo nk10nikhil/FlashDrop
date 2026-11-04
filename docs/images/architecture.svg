@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="900" viewBox="0 0 1500 900" role="img" aria-labelledby="title description">
+  <title id="title">FlashDrop production architecture</title>
+  <desc id="description">A load balancer routes authenticated orders to multiple ECS API tasks. PostgreSQL atomically reserves inventory and stores orders with an outbox. A worker publishes to MSK and consumes events idempotently. Redis is an optional cache and CloudWatch and OpenTelemetry collect telemetry.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#3768a6"/></marker>
+    <marker id="asyncArrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#b46a16"/></marker>
+    <style>
+      text { font-family: Inter, Segoe UI, Arial, sans-serif; fill: #17253b; }
+      .title { font-size: 28px; font-weight: 700; }
+      .subtitle { font-size: 14px; fill: #5b6a7d; }
+      .group { fill: #f7f9fc; stroke: #8092a8; stroke-width: 2; stroke-dasharray: 8 6; }
+      .groupTitle { font-size: 17px; font-weight: 700; fill: #334966; }
+      .box { rx: 12; stroke-width: 2; }
+      .client { fill: #f0ecff; stroke: #8066be; }
+      .edge { fill: #fff3df; stroke: #d29435; }
+      .app { fill: #eaf7ef; stroke: #4a9a68; }
+      .db { fill: #e9f2ff; stroke: #5482bb; }
+      .broker { fill: #fff0df; stroke: #c78331; }
+      .ops { fill: #eef1f5; stroke: #7b8796; }
+      .boxTitle { font-size: 16px; font-weight: 700; }
+      .detail { font-size: 12px; fill: #4c5b6d; }
+      .sync { fill: none; stroke: #3768a6; stroke-width: 2.5; marker-end: url(#arrow); }
+      .async { fill: none; stroke: #b46a16; stroke-width: 2.5; stroke-dasharray: 7 5; marker-end: url(#asyncArrow); }
+      .edgeLabel { font-size: 11px; fill: #3e536d; }
+      .legend { font-size: 12px; fill: #4c5b6d; }
+    </style>
+  </defs>
+
+  <rect width="1500" height="900" fill="#ffffff"/>
+  <text class="title" x="40" y="48">FlashDrop | high-concurrency order processing</text>
+  <text class="subtitle" x="40" y="74">PostgreSQL is authoritative for inventory. Async publication and processing are recoverable and at-least-once.</text>
+
+  <rect class="group" x="218" y="110" width="1245" height="615" rx="18"/>
+  <text class="groupTitle" x="244" y="140">AWS VPC · private subnets across Availability Zones</text>
+
+  <rect class="box client" x="36" y="260" width="145" height="100"/>
+  <text class="boxTitle" x="61" y="298">Customers</text>
+  <text class="detail" x="58" y="322">HTTPS + idempotency key</text>
+  <text class="detail" x="72" y="341">10k flash-sale clients</text>
+
+  <rect class="box edge" x="255" y="196" width="170" height="95"/>
+  <text class="boxTitle" x="288" y="229">AWS WAF</text>
+  <text class="detail" x="279" y="251">Rate based rule</text>
+  <text class="detail" x="273" y="269">Ingress filtering</text>
+  <rect class="box edge" x="255" y="360" width="170" height="95"/>
+  <text class="boxTitle" x="288" y="393">Application LB</text>
+  <text class="detail" x="279" y="415">HTTPS termination</text>
+  <text class="detail" x="274" y="433">Health checks</text>
+
+  <rect class="group" x="465" y="165" width="395" height="510" rx="14"/>
+  <text class="groupTitle" x="488" y="193">Amazon ECS · Fargate tasks</text>
+  <rect class="box app" x="495" y="220" width="335" height="120"/>
+  <text class="boxTitle" x="520" y="250">API service · horizontally scaled</text>
+  <text class="detail" x="520" y="275">Fastify replicas · JWT validation · rate limit</text>
+  <text class="detail" x="520" y="297">Atomic PostgreSQL transaction + product cache</text>
+  <text class="detail" x="520" y="319">Docker containers · rolling deployment</text>
+  <rect class="box app" x="495" y="405" width="335" height="160"/>
+  <text class="boxTitle" x="520" y="435">Worker service · independently scaled</text>
+  <text class="detail" x="520" y="460">Outbox publisher leases rows with SKIP LOCKED</text>
+  <text class="detail" x="520" y="482">Kafka consumer commits offset after DB commit</text>
+  <text class="detail" x="520" y="504">Unique processed event ID prevents repeats</text>
+  <text class="detail" x="520" y="526">DLQ for invalid or permanent failures</text>
+
+  <rect class="box db" x="900" y="220" width="230" height="160"/>
+  <text class="boxTitle" x="925" y="251">Amazon RDS PostgreSQL</text>
+  <text class="detail" x="925" y="278">Multi AZ · encrypted backups</text>
+  <text class="detail" x="925" y="301">Authoritative available_stock</text>
+  <text class="detail" x="925" y="324">Orders · idempotency · outbox</text>
+  <text class="detail" x="925" y="347">Conditional UPDATE prevents oversell</text>
+
+  <rect class="box db" x="900" y="440" width="230" height="110"/>
+  <text class="boxTitle" x="925" y="473">ElastiCache Redis</text>
+  <text class="detail" x="925" y="498">Short TTL product cache only</text>
+  <text class="detail" x="925" y="521">Optional; database fallback</text>
+
+  <rect class="box broker" x="1190" y="220" width="225" height="115"/>
+  <text class="boxTitle" x="1216" y="252">Amazon MSK</text>
+  <text class="detail" x="1216" y="278">orders.created.v1</text>
+  <text class="detail" x="1216" y="300">TLS + IAM SASL OAuth</text>
+  <rect class="box broker" x="1190" y="405" width="225" height="105"/>
+  <text class="boxTitle" x="1216" y="438">Dead letter topic</text>
+  <text class="detail" x="1216" y="464">Permanent invalid events</text>
+  <text class="detail" x="1216" y="486">Source offset saved</text>
+
+  <rect class="box ops" x="270" y="765" width="360" height="82"/>
+  <text class="boxTitle" x="293" y="795">CloudWatch</text>
+  <text class="detail" x="293" y="819">Structured task logs · alarms · service health</text>
+  <rect class="box ops" x="665" y="765" width="360" height="82"/>
+  <text class="boxTitle" x="688" y="795">OpenTelemetry</text>
+  <text class="detail" x="688" y="819">HTTP · PostgreSQL · Redis · Kafka traces</text>
+  <rect class="box ops" x="1060" y="765" width="355" height="82"/>
+  <text class="boxTitle" x="1083" y="795">Local monitoring</text>
+  <text class="detail" x="1083" y="819">Prometheus scrape · provisioned Grafana dashboard</text>
+
+  <path class="sync" d="M181 294 L245 294 L245 407 L255 407"/>
+  <text class="edgeLabel" x="192" y="281">HTTPS request</text>
+  <path class="sync" d="M340 291 L340 350"/>
+  <text class="edgeLabel" x="350" y="327">WAF association</text>
+  <path class="sync" d="M425 407 L460 407 L460 280 L495 280"/>
+  <text class="edgeLabel" x="429" y="395">JWT checked by API</text>
+  <path class="sync" d="M830 275 L890 275"/>
+  <text class="edgeLabel" x="832" y="260">Commit transaction</text>
+  <path class="async" d="M830 485 L880 485 L880 350 L900 350"/>
+  <text class="edgeLabel" x="835" y="472">Lease / mark</text>
+  <path class="async" d="M1130 275 L1180 275"/>
+  <text class="edgeLabel" x="1134" y="258">Publish after commit</text>
+  <path class="async" d="M1190 310 L1155 310 L1155 425 L830 455"/>
+  <text class="edgeLabel" x="1004" y="412">At least once</text>
+  <path class="async" d="M830 525 L1178 470"/>
+  <text class="edgeLabel" x="959" y="532">DLQ after broker ack</text>
+  <path class="sync" d="M830 320 L865 320 L865 475 L900 475"/>
+  <text class="edgeLabel" x="837" y="460">Best effort cache</text>
+  <path class="sync" d="M690 565 L690 690 L450 690 L450 755"/>
+  <path class="sync" d="M690 565 L690 700 L845 700 L845 755"/>
+  <path class="sync" d="M700 340 L700 715 L1235 715 L1235 755"/>
+  <text class="legend" x="40" y="880">Solid arrows: synchronous request / database path. Dashed arrows: outbox, Kafka, cache, and asynchronous processing.</text>
+</svg>

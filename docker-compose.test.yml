@@ -1,0 +1,16 @@
+services:
+  test-postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: flashdrop_test
+      POSTGRES_USER: flashdrop
+      POSTGRES_PASSWORD: flashdrop-test
+    ports:
+      - "55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flashdrop -d flashdrop_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 30

@@ -1,0 +1,56 @@
+erDiagram
+  PRODUCTS ||--o{ ORDERS : contains
+  ORDERS ||--|| IDEMPOTENCY_RECORDS : replay_response
+  ORDERS ||--o{ OUTBOX_EVENTS : emits
+  OUTBOX_EVENTS ||--o| PROCESSED_EVENTS : consumed_once
+
+  PRODUCTS {
+    text id PK
+    text name
+    text sku UK
+    int available_stock CHECK_nonnegative
+    int reserved_stock CHECK_nonnegative
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  ORDERS {
+    uuid id PK
+    text user_id
+    text product_id FK
+    int quantity CHECK_positive
+    text status CHECK_allowed
+    int total_amount
+    text idempotency_key
+    text request_hash
+    timestamptz created_at
+    timestamptz updated_at
+    UNIQUE user_id_idempotency_key
+  }
+  IDEMPOTENCY_RECORDS {
+    text user_id
+    text idempotency_key
+    text request_hash
+    uuid order_id FK_UK
+    int response_status
+    jsonb response_body
+    timestamptz created_at
+    UNIQUE user_id_idempotency_key
+  }
+  OUTBOX_EVENTS {
+    uuid id PK
+    uuid aggregate_id FK
+    text event_type
+    jsonb payload
+    timestamptz created_at
+    timestamptz published_at
+    int attempts
+    timestamptz next_attempt_at
+    uuid lease_token
+    timestamptz leased_until
+    text last_error
+  }
+  PROCESSED_EVENTS {
+    uuid event_id PK
+    text event_type
+    timestamptz processed_at
+  }

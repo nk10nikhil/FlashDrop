@@ -1,0 +1,55 @@
+flowchart LR
+  Client[Customers and clients]
+  Issuer[JWT issuer / JWKS]
+  WAF[AWS WAF rate rules]
+  ALB[Application Load Balancer<br/>HTTPS termination]
+
+  subgraph VPC[Private AWS VPC across Availability Zones]
+    subgraph ECS[ECS Fargate services — Docker containers]
+      API1[API task 1<br/>Fastify / TypeScript]
+      API2[API task 2..N<br/>Fastify / TypeScript]
+      Worker[Worker tasks<br/>Outbox publisher + Kafka consumer]
+    end
+    PG[(Amazon RDS PostgreSQL<br/>authoritative inventory<br/>orders + idempotency + outbox)]
+    Redis[(Amazon ElastiCache Redis<br/>short TTL product cache)]
+    MSK[[Amazon MSK<br/>orders.created.v1]]
+    DLQ[[Amazon MSK<br/>orders.created.dlq.v1]]
+    Secrets[AWS Secrets Manager]
+    CW[CloudWatch logs and alarms]
+    OTEL[OpenTelemetry collector / trace exporter]
+  end
+  Local[Local Prometheus + Grafana]
+
+  Client -->|HTTPS order request| WAF
+  WAF --> ALB
+  ALB -->|JWT identity passed to API| API1
+  ALB -->|JWT identity passed to API| API2
+  Issuer -. JWKS signature verification .-> API1
+  Issuer -. JWKS signature verification .-> API2
+  API1 -->|Synchronous transaction: idempotency, conditional stock update, order, outbox| PG
+  API2 -->|Synchronous transaction: idempotency, conditional stock update, order, outbox| PG
+  API1 -. cache read / post-commit invalidation .-> Redis
+  API2 -. cache read / post-commit invalidation .-> Redis
+  Worker -->|Lease with SKIP LOCKED| PG
+  Worker -->|Publish after commit, TLS + IAM| MSK
+  Worker -->|Mark published after broker ack| PG
+  MSK -->|At-least-once delivery| Worker
+  Worker -->|Commit status + processed event before offset ack| PG
+  Worker -->|Invalid/permanent event after DLQ ack| DLQ
+  API1 -. logs .-> CW
+  API2 -. logs .-> CW
+  Worker -. logs .-> CW
+  API1 -. OTLP traces .-> OTEL
+  API2 -. OTLP traces .-> OTEL
+  Worker -. OTLP traces .-> OTEL
+  Local -. scrapes /metrics .-> API1
+  Local -. scrapes /metrics .-> Worker
+  Secrets -. injected at task start .-> API1
+  Secrets -. injected at task start .-> Worker
+
+  classDef db fill:#e8f2ff,stroke:#3572b0,color:#102f4f;
+  classDef broker fill:#fff1d6,stroke:#c58b2b,color:#533800;
+  classDef app fill:#e9f8ef,stroke:#32945a,color:#123c24;
+  class PG,Redis db;
+  class MSK,DLQ broker;
+  class API1,API2,Worker app;

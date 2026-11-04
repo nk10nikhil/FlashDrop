@@ -1,0 +1,177 @@
+name: flashdrop
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: flashdrop
+      POSTGRES_USER: flashdrop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flashdrop-local-only}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flashdrop -d flashdrop"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redpanda:
+    image: redpandadata/redpanda:v25.3.5
+    command:
+      - redpanda
+      - start
+      - --mode
+      - dev-container
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --brokers=localhost:9092 | grep -q Healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    command: ["sh", "-c", "node packages/database/dist/migrate.js && node packages/database/dist/seed.js"]
+    environment: &app-environment
+      NODE_ENV: development
+      DATABASE_URL: postgres://flashdrop:${POSTGRES_PASSWORD:-flashdrop-local-only}@postgres:5432/flashdrop
+      DATABASE_POOL_MAX: 20
+      REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_CLIENT_ID: flashdrop
+      KAFKA_GROUP_ID: flashdrop-orders-v1
+      KAFKA_TOPIC_ORDERS: orders.created.v1
+      KAFKA_TOPIC_DLQ: orders.created.dlq.v1
+      AUTH_MODE: development
+      PRODUCT_INITIAL_STOCK: ${PRODUCT_INITIAL_STOCK:-100}
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    command: ["node", "--import", "apps/api/dist/instrumentation.js", "apps/api/dist/server.js"]
+    environment:
+      <<: *app-environment
+      PORT: 3000
+      HOST: 0.0.0.0
+      RATE_LIMIT_MAX: 300
+      RATE_LIMIT_WINDOW_MS: 60000
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["node", "--import", "apps/worker/dist/instrumentation.js", "apps/worker/dist/worker.js"]
+    environment:
+      <<: *app-environment
+      METRICS_PORT: 9464
+      OUTBOX_POLL_MS: 500
+      OUTBOX_BATCH_SIZE: 50
+      OUTBOX_LEASE_MS: 30000
+      WORKER_RETRY_MS: 1000
+    ports:
+      - "9464:9464"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9464/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - api
+      - worker
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.139.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4318:4318"
+    volumes:
+      - ./infrastructure/monitoring/otel-collector.yml:/etc/otelcol/config.yaml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.2.1
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin-local-only}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  redpanda_data:
+  prometheus_data:
+  grafana_data:

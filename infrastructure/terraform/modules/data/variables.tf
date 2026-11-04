@@ -1,0 +1,21 @@
+variable "name" { type = string }
+variable "environment" { type = string }
+variable "vpc_id" { type = string }
+variable "private_subnet_ids" { type = list(string) }
+variable "data_security_group_id" { type = string }
+variable "postgres_engine_version" { type = string }
+variable "postgres_instance_class" { type = string }
+variable "postgres_allocated_storage" { type = number }
+variable "postgres_max_allocated_storage" { type = number }
+variable "postgres_backup_days" { type = number }
+variable "redis_node_type" { type = string }
+variable "redis_engine_version" { type = string }
+variable "msk_instance_type" { type = string }
+variable "msk_kafka_version" { type = string }
+variable "msk_volume_size" { type = number }
+variable "msk_orders_topic" { type = string }
+variable "msk_dlq_topic" { type = string }
+variable "msk_consumer_group" { type = string }
+variable "multi_az" { type = bool }
+variable "deletion_protection" { type = bool }
+variable "tags" { type = map(string) default = {} }

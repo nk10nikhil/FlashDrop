@@ -1,0 +1,33 @@
+{
+  "name": "flashdrop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.24.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "test": "pnpm build && vitest run",
+    "test:integration": "pnpm build && vitest run tests/integration",
+    "test:concurrency": "pnpm build && vitest run tests/concurrency",
+    "test:failure": "pnpm build && vitest run tests/failure-scenarios",
+    "test:watch": "vitest",
+    "db:migrate": "pnpm --filter @flashdrop/shared build && pnpm --filter @flashdrop/database build && tsx packages/database/src/migrate.ts",
+    "db:seed": "pnpm --filter @flashdrop/shared build && pnpm --filter @flashdrop/database build && tsx packages/database/src/seed.ts",
+    "db:reset-demo": "pnpm --filter @flashdrop/shared build && pnpm --filter @flashdrop/database build && tsx scripts/reset-demo.ts",
+    "load:test": "k6 run load-tests/flash-sale.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
+    "eslint": "^10.14.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.1.0"
+  }
+}

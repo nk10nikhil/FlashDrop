@@ -1,0 +1,16 @@
+{
+  "uid": "flashdrop-overview",
+  "title": "FlashDrop Order Processing",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    { "id": 1, "title": "Requests per second", "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }, "targets": [{ "expr": "sum(rate(flashdrop_http_requests_total[1m]))", "legendFormat": "requests/s" }] },
+    { "id": 2, "title": "Accepted orders and stock rejections", "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }, "targets": [{ "expr": "rate(flashdrop_orders_accepted_total[1m])", "legendFormat": "accepted/s" }, { "expr": "rate(flashdrop_stock_rejections_total[1m])", "legendFormat": "out of stock/s" }] },
+    { "id": 3, "title": "API p95 latency", "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }, "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(flashdrop_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95 seconds" }] },
+    { "id": 4, "title": "Outbox backlog", "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }, "targets": [{ "expr": "flashdrop_outbox_pending", "legendFormat": "events" }] },
+    { "id": 5, "title": "Worker processing and duplicate deliveries", "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }, "targets": [{ "expr": "rate(flashdrop_worker_events_processed_total[1m])", "legendFormat": "processed/s" }, { "expr": "rate(flashdrop_worker_duplicate_events_total[1m])", "legendFormat": "duplicate/s" }] },
+    { "id": 6, "title": "Worker dead letters", "type": "timeseries", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }, "targets": [{ "expr": "increase(flashdrop_worker_dead_lettered_total[5m])", "legendFormat": "dead lettered" }] }
+  ]
+}

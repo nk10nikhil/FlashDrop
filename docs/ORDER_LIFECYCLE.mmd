@@ -1,0 +1,26 @@
+flowchart TD
+  A[POST /orders] --> B[Validate schema and authenticated identity]
+  B --> C[Begin PostgreSQL transaction]
+  C --> D[Insert unique user + idempotency key]
+  D -->|Conflict, matching hash| E[Return stored HTTP 202 response]
+  D -->|Conflict, different hash| F[HTTP 409 key reuse]
+  D -->|New key| G[Atomic UPDATE stock where available_stock >= quantity]
+  G -->|No matching product| H[Rollback and HTTP 404]
+  G -->|Insufficient stock| I[Rollback and HTTP 409]
+  G -->|Reserved| J[Insert PENDING order]
+  J --> K[Insert OrderCreated outbox row]
+  K --> L[Store replay response]
+  L --> M[Commit transaction]
+  M --> N[HTTP 202 PENDING]
+  N -. publisher leases rows with SKIP LOCKED .-> O[Outbox publisher]
+  O -->|Broker ack| P[Mark outbox published]
+  O -. publish failure: exponential retry .-> O
+  O --> Q[Kafka order topic]
+  Q --> R[Validate event and insert processed event ID]
+  R -->|Already processed| S[Commit Kafka offset safely]
+  R -->|Permanent invalid event| T[Publish DLQ, then commit offset]
+  R -->|New event| U[Update order PENDING to CONFIRMED]
+  U --> V[Commit PostgreSQL transaction]
+  V --> W[Commit Kafka offset]
+  V -. crash before offset commit; redelivery hits unique event ID .-> R
+  O -. crash after broker ack; lease expires and event may publish twice .-> Q

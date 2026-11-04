@@ -1,0 +1,22 @@
+{
+  "name": "@flashdrop/worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node --import ./dist/instrumentation.js dist/worker.js"
+  },
+  "dependencies": {
+    "@flashdrop/database": "workspace:*",
+    "@flashdrop/shared": "workspace:*",
+    "@opentelemetry/auto-instrumentations-node": "^0.82.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.300.0",
+    "@opentelemetry/sdk-node": "^0.300.0",
+    "@prometheus-io/client": "^0.16.1",
+    "aws-msk-iam-sasl-signer-js": "^1.0.3",
+    "kafkajs": "^2.2.4",
+    "pino": "^10.4.0"
+  }
+}

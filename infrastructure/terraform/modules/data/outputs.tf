@@ -1,0 +1,13 @@
+output "postgres_endpoint" { value = aws_db_instance.postgres.address }
+output "postgres_identifier" { value = aws_db_instance.postgres.identifier }
+output "db_admin_secret_arn" { value = aws_secretsmanager_secret.db_admin.arn }
+output "db_application_secret_arn" { value = aws_secretsmanager_secret.db_application.arn }
+output "redis_secret_arn" { value = aws_secretsmanager_secret.redis.arn }
+output "redis_endpoint" { value = aws_elasticache_replication_group.redis.primary_endpoint_address }
+output "kafka_secret_arn" { value = aws_secretsmanager_secret.kafka.arn }
+output "msk_arn" { value = aws_msk_cluster.main.arn }
+output "msk_cluster_name" { value = aws_msk_cluster.main.cluster_name }
+output "msk_bootstrap_brokers_iam" { value = aws_msk_cluster.main.bootstrap_brokers_sasl_iam }
+output "msk_orders_topic" { value = var.msk_orders_topic }
+output "msk_dlq_topic" { value = var.msk_dlq_topic }
+output "msk_consumer_group" { value = var.msk_consumer_group }
